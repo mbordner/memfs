@@ -56,4 +56,13 @@ func Test_File_Operations(t *testing.T) {
 	err = f.Close()
 	assert.NotNil(t, err)
 	assert.True(t, errors.Is(err, os.ErrClosed))
+
+	f, err = inMemFS.Open("/test/file1")
+	assert.NotNil(t, f)
+	assert.Nil(t, err)
+
+	n, err = f.Write([]byte(`change`))
+	assert.Equal(t, 0, n)
+	assert.NotNil(t, err)
+
 }

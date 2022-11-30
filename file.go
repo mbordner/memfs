@@ -82,7 +82,7 @@ func (f *File) Close() error {
 }
 
 func (f *File) Read(p []byte) (n int, err error) {
-	if f.node.unlinked {
+	if f.node.unlinked || !f.flag.canRead() {
 		return 0, fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
 	}
 	if f.closed {
@@ -96,7 +96,7 @@ func (f *File) Read(p []byte) (n int, err error) {
 }
 
 func (f *File) ReadAt(p []byte, off int64) (n int, err error) {
-	if f.node.unlinked {
+	if f.node.unlinked || !f.flag.canRead() {
 		return 0, fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
 	}
 	if f.closed {
@@ -108,7 +108,7 @@ func (f *File) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (f *File) Seek(offset int64, whence int) (n int64, err error) {
-	if f.node.unlinked {
+	if f.node.unlinked || !f.flag.canRead() || !f.flag.canWrite() {
 		return 0, fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
 	}
 	if f.closed {
@@ -133,7 +133,7 @@ func (f *File) Seek(offset int64, whence int) (n int64, err error) {
 }
 
 func (f *File) Write(p []byte) (n int, err error) {
-	if f.node.unlinked {
+	if f.node.unlinked || !f.flag.canWrite() {
 		return 0, fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
 	}
 	if f.closed {
@@ -166,7 +166,7 @@ func (f *File) Write(p []byte) (n int, err error) {
 }
 
 func (f *File) WriteAt(p []byte, off int64) (n int, err error) {
-	if f.node.unlinked {
+	if f.node.unlinked || !f.flag.canWrite() {
 		return 0, fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
 	}
 	if f.closed {
