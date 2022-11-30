@@ -1,5 +1,4 @@
-
-
+[![codecov](https://codecov.io/gh/mbordner/memfs/branch/main/graph/badge.svg?token=E98K7R5ZIY)](https://codecov.io/gh/mbordner/memfs)
 
 ```go 
 package main
