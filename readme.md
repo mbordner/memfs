@@ -23,30 +23,30 @@ file, err := fs.Open(filename)
 var fs FS = osFS{}
 
 type File interface {
-io.Closer
-io.Reader
-io.ReaderAt
-io.Seeker
-io.Writer
-io.WriterAt
-Stat() (os.FileInfo, error)
-Name() string
-ReadDir(n int) ([]os.DirEntry, error)
-Readdir(count int) ([]os.FileInfo, error)
-Readdirnames(n int) ([]string, error)
+    io.Closer
+    io.Reader
+    io.ReaderAt
+    io.Seeker
+    io.Writer
+    io.WriterAt
+    Stat() (os.FileInfo, error)
+    Name() string
+    ReadDir(n int) ([]os.DirEntry, error)
+    Readdir(count int) ([]os.FileInfo, error)
+    Readdirnames(n int) ([]string, error)
 }
 
 type FS interface {
-Open(name string) (File, error)
-Create(name string) (File, error)
-Stat(name string) (os.FileInfo, error)
-Remove(name string) error
-CreateTemp(dir, pattern string) (File, error)
-MkdirAll(path string, perm os.FileMode) error
-RemoveAll(path string) error
-ReadDir(name string) ([]os.DirEntry, error)
-MkdirTemp(dir, pattern string) (name string, err error)
-TempDir() string
+    Open(name string) (File, error)
+    Create(name string) (File, error)
+    Stat(name string) (os.FileInfo, error)
+    Remove(name string) error
+    CreateTemp(dir, pattern string) (File, error)
+    MkdirAll(path string, perm os.FileMode) error
+    RemoveAll(path string) error
+    ReadDir(name string) ([]os.DirEntry, error)
+    MkdirTemp(dir, pattern string) (name string, err error)
+    TempDir() string
 }
 
 // osFS implements FS using the local disk.
@@ -60,9 +60,7 @@ func (osFS) CreateTemp(dir, pattern string) (File, error)  { return os.CreateTem
 func (osFS) MkdirAll(path string, perms os.FileMode) error { return os.MkdirAll(path, perms) }
 func (osFS) RemoveAll(path string) error                   { return os.RemoveAll(path) }
 func (osFS) ReadDir(name string) ([]os.DirEntry, error)    { return os.ReadDir(name) }
-func (osFS) MkdirTemp(dir, pattern string) (name string, err error) {
-return os.MkdirTemp(dir, pattern)
-}
+func (osFS) MkdirTemp(dir, pattern string) (name string, err error) { return os.MkdirTemp(dir, pattern) }
 func (osFS) TempDir() string { return os.TempDir() }
 ```
 
@@ -81,19 +79,14 @@ func (mfs *memFS) Open(name string) (File, error)        { return mfs.fs.Open(na
 func (mfs *memFS) Create(name string) (File, error)      { return mfs.fs.Create(name) }
 func (mfs *memFS) Stat(name string) (os.FileInfo, error) { return mfs.fs.Stat(name) }
 func (mfs *memFS) Remove(name string) error              { return mfs.fs.Remove(name) }
-func (mfs *memFS) CreateTemp(dir, pattern string) (File, error) {
-	return mfs.fs.CreateTemp(dir, pattern)
-}
+func (mfs *memFS) CreateTemp(dir, pattern string) (File, error) { return mfs.fs.CreateTemp(dir, pattern) }
 func (mfs *memFS) MkdirAll(path string, perms os.FileMode) error { return mfs.fs.MkdirAll(path, perms) }
 func (mfs *memFS) RemoveAll(path string) error                   { return mfs.fs.RemoveAll(path) }
 func (mfs *memFS) ReadDir(name string) ([]os.DirEntry, error)    { return mfs.fs.ReadDir(name) }
-func (mfs *memFS) MkdirTemp(dir, pattern string) (name string, err error) {
-	return mfs.fs.MkdirTemp(dir, pattern)
-}
+func (mfs *memFS) MkdirTemp(dir, pattern string) (name string, err error) { return mfs.fs.MkdirTemp(dir, pattern) }
 func (mfs *memFS) TempDir() string { return mfs.fs.TempDir() }
 
 fs = &memFS{fs: memfs.New()}
-
 ```
 
 
