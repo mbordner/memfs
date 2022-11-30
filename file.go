@@ -108,7 +108,7 @@ func (f *File) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (f *File) Seek(offset int64, whence int) (n int64, err error) {
-	if f.node.unlinked || !f.flag.canRead() || !f.flag.canWrite() {
+	if f.node.unlinked {
 		return 0, fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
 	}
 	if f.closed {
@@ -129,6 +129,7 @@ func (f *File) Seek(offset int64, whence int) (n int64, err error) {
 		return 0, errors.New("negative result pos")
 	}
 	f.pos = newPos
+	f.buf = bytes.NewBuffer(f.node.content[f.pos:])
 	return newPos, nil
 }
 
