@@ -54,6 +54,12 @@ func Test_File_Operations(t *testing.T) {
 	err = f.Close()
 	assert.Nil(t, err)
 
+	_, err = f.Read(readData)
+	assert.NotNil(t, err)
+
+	_, err = f.ReadAt(readData, 0)
+	assert.NotNil(t, err)
+
 	err = f.Close()
 	assert.NotNil(t, err)
 	assert.True(t, errors.Is(err, os.ErrClosed))
@@ -106,5 +112,23 @@ func Test_File_Operations(t *testing.T) {
 	assert.Equal(t, len(readData), n)
 
 	assert.Equal(t, `test data3`, string(readData))
+
+	err = inMemFS.Remove("/test/file1")
+	assert.Nil(t, err)
+
+	p, err = f2.Seek(0, io.SeekStart)
+	assert.NotNil(t, err)
+
+	n, err = f2.Read(readData)
+	assert.NotNil(t, err)
+
+	n, err = f2.ReadAt(readData, 0)
+	assert.NotNil(t, err)
+
+	_, err = f2.Stat()
+	assert.NotNil(t, err)
+
+	_, err = f.WriteAt([]byte(`deleted`), 0)
+	assert.NotNil(t, err)
 
 }

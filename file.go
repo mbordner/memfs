@@ -71,9 +71,6 @@ func (f *File) Stat() (os.FileInfo, error) {
 }
 
 func (f *File) Close() error {
-	if f.node.unlinked {
-		return fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
-	}
 	if f.closed {
 		return fmt.Errorf("file closed: %s: %w", f.Name(), fs.ErrClosed)
 	}
