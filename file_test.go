@@ -310,11 +310,74 @@ func Test_ReadDirFuncs(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 10, len(names))
 
+	names, err = dir.Readdirnames(5)
+	assert.Nil(t, err)
+	assert.Equal(t, 5, len(names))
+
+	names, err = dir.Readdirnames(5)
+	assert.Nil(t, err)
+	assert.Equal(t, 5, len(names))
+
 	entries, err := dir.ReadDir(-1)
 	assert.Nil(t, err)
 	assert.Equal(t, 10, len(entries))
 
+	entries, err = dir.ReadDir(5)
+	assert.Nil(t, err)
+	assert.Equal(t, 5, len(entries))
+
+	entries, err = dir.ReadDir(5)
+	assert.Nil(t, err)
+	assert.Equal(t, 5, len(entries))
+
 	infos, err := dir.Readdir(-1)
 	assert.Nil(t, err)
 	assert.Equal(t, 10, len(infos))
+
+	infos, err = dir.Readdir(5)
+	assert.Nil(t, err)
+	assert.Equal(t, 5, len(infos))
+
+	infos, err = dir.Readdir(5)
+	assert.Nil(t, err)
+	assert.Equal(t, 5, len(infos))
+
+	entries, err = inMemFS.ReadDir(tmpDirName)
+	assert.Nil(t, err)
+	assert.Equal(t, 10, len(entries))
+
+	entries, err = inMemFS.ReadDir(string([]byte{0x52, 0xE4, 0x76}))
+	assert.Nil(t, entries)
+	assert.NotNil(t, err)
+
+	err = dir.Close()
+	assert.Nil(t, err)
+
+	names, err = dir.Readdirnames(5)
+	assert.NotNil(t, err)
+	assert.True(t, errors.Is(err, os.ErrClosed))
+
+	infos, err = dir.Readdir(5)
+	assert.NotNil(t, err)
+	assert.True(t, errors.Is(err, os.ErrClosed))
+
+	entries, err = dir.ReadDir(5)
+	assert.NotNil(t, err)
+	assert.True(t, errors.Is(err, os.ErrClosed))
+
+	err = inMemFS.RemoveAll(tmpDirName)
+	assert.Nil(t, err)
+
+	names, err = dir.Readdirnames(5)
+	assert.NotNil(t, err)
+	assert.True(t, errors.Is(err, os.ErrInvalid))
+
+	infos, err = dir.Readdir(5)
+	assert.NotNil(t, err)
+	assert.True(t, errors.Is(err, os.ErrInvalid))
+
+	entries, err = dir.ReadDir(5)
+	assert.NotNil(t, err)
+	assert.True(t, errors.Is(err, os.ErrInvalid))
+
 }

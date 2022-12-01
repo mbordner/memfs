@@ -285,7 +285,7 @@ func (f *File) ReadDir(n int) ([]os.DirEntry, error) {
 			node: f.node.entries[names[i]],
 		}
 	}
-	if n < 0 || n < len(names) {
+	if n < 0 || n >= len(names) {
 		return dirEntries, nil
 	}
 	dirEntries = dirEntries[f.indexReadDir:]
@@ -316,7 +316,7 @@ func (f *File) Readdir(n int) ([]os.FileInfo, error) {
 			node: f.node.entries[names[i]],
 		}
 	}
-	if n < 0 || n < len(names) {
+	if n < 0 || n >= len(names) {
 		return fileInfos, nil
 	}
 	fileInfos = fileInfos[f.indexReaddir:]
@@ -340,7 +340,7 @@ func (f *File) Readdirnames(n int) ([]string, error) {
 	names := f.node.getEntryNames()
 	f.node.mutex.Lock()
 	defer f.node.mutex.Unlock()
-	if n < 0 || n < len(names) {
+	if n < 0 || n >= len(names) {
 		return names, nil
 	}
 	names = names[f.indexReaddirnames:]

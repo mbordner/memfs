@@ -326,22 +326,18 @@ func (f *FS) RemoveAll(path string) error {
 		return fmt.Errorf("path does not exist: %s: %w", path, fs.ErrNotExist)
 	}
 	if entryNode.isDir() {
-		if len(entryNode.entries) == 0 {
-			parentNode.mutex.Lock()
-			defer parentNode.mutex.Unlock()
-			entryNode.unlinked = true
-			delete(parentNode.entries, entryNode.name)
-			for part := range entryNode.entries {
-				_ = f.RemoveAll(filepath.Join(path, entryNode.name, part))
-			}
-		} else {
-			return fmt.Errorf("directory not empty: %s: %w", path, fs.ErrInvalid)
+		for part := range entryNode.entries {
+			_ = f.RemoveAll(filepath.Join(path, part))
 		}
-	} else {
 		parentNode.mutex.Lock()
-		defer parentNode.mutex.Unlock()
 		entryNode.unlinked = true
 		delete(parentNode.entries, entryNode.name)
+		parentNode.mutex.Unlock()
+	} else {
+		parentNode.mutex.Lock()
+		entryNode.unlinked = true
+		delete(parentNode.entries, entryNode.name)
+		parentNode.mutex.Unlock()
 	}
 	return nil
 }
