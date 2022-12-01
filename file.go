@@ -1,8 +1,6 @@
 package memfs
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -12,6 +10,116 @@ import (
 	"time"
 )
 
+type contentOwner interface {
+	lockContent()
+	unlockContent()
+	getContent() []byte
+	setContent(c []byte)
+}
+
+type contentReadWriteSeeker interface {
+	io.Reader
+	io.ReaderAt
+	io.Seeker
+	io.Writer
+	io.WriterAt
+}
+
+type contentReadWriteSeekerImpl struct {
+	owner contentOwner
+	pos   int
+}
+
+func (crws *contentReadWriteSeekerImpl) read(p []byte) (n int, err error) {
+	content := crws.owner.getContent()
+	if crws.pos >= len(p) {
+		return 0, io.EOF
+	}
+	n = copy(p, content[crws.pos:])
+	crws.pos += n
+	return n, nil
+}
+
+func (crws *contentReadWriteSeekerImpl) Read(p []byte) (n int, err error) {
+	crws.owner.lockContent()
+	defer crws.owner.unlockContent()
+	return crws.read(p)
+}
+
+func (crws *contentReadWriteSeekerImpl) ReadAt(p []byte, off int64) (n int, err error) {
+	if off < 0 {
+		return 0, os.ErrInvalid
+	}
+	crws.owner.lockContent()
+	defer crws.owner.unlockContent()
+	crws.pos = int(off)
+	return crws.read(p)
+}
+
+func (crws *contentReadWriteSeekerImpl) Seek(offset int64, whence int) (int64, error) {
+	crws.owner.lockContent()
+	defer crws.owner.unlockContent()
+
+	content := crws.owner.getContent()
+
+	newPos, offs := 0, int(offset)
+	switch whence {
+	case io.SeekStart:
+		newPos = offs
+	case io.SeekCurrent:
+		newPos = crws.pos + offs
+	case io.SeekEnd:
+		newPos = len(content) + offs
+	}
+	if newPos < 0 {
+		return 0, os.ErrInvalid
+	}
+
+	crws.pos = newPos
+	return int64(newPos), nil
+}
+
+func (crws *contentReadWriteSeekerImpl) write(p []byte) (n int, err error) {
+	content := crws.owner.getContent()
+
+	var newContent []byte
+
+	if crws.pos >= len(content) {
+		l := crws.pos + len(p)
+		newContent = make([]byte, l, l)
+		copy(newContent, content)
+	} else if crws.pos+len(p) > len(content) {
+		l := crws.pos + len(p)
+		newContent = make([]byte, l, l)
+		copy(newContent, content)
+	} else {
+		newContent = content
+	}
+
+	copy(newContent[crws.pos:], p)
+
+	crws.owner.setContent(newContent)
+
+	crws.pos += len(p)
+	return len(p), nil
+}
+
+func (crws *contentReadWriteSeekerImpl) Write(p []byte) (n int, err error) {
+	crws.owner.lockContent()
+	defer crws.owner.unlockContent()
+	return crws.write(p)
+}
+
+func (crws *contentReadWriteSeekerImpl) WriteAt(p []byte, off int64) (n int, err error) {
+	if off < 0 {
+		return 0, os.ErrInvalid
+	}
+	crws.owner.lockContent()
+	defer crws.owner.unlockContent()
+	crws.pos = int(off)
+	return crws.write(p)
+}
+
 type fsNode struct {
 	name     string
 	perm     os.FileMode
@@ -20,6 +128,22 @@ type fsNode struct {
 	mutex    sync.Mutex
 	entries  map[string]*fsNode
 	unlinked bool
+}
+
+func (f *fsNode) lockContent() {
+	f.mutex.Lock()
+}
+
+func (f *fsNode) unlockContent() {
+	f.mutex.Unlock()
+}
+
+func (f *fsNode) getContent() []byte {
+	return f.content
+}
+
+func (f *fsNode) setContent(c []byte) {
+	f.content = c
 }
 
 func (f *fsNode) isDir() bool {
@@ -46,9 +170,8 @@ func (f *fsNode) getEntryNames() []string {
 type File struct {
 	node              *fsNode
 	flag              fileFlags
-	buf               *bytes.Buffer
 	fd                int64
-	pos               int64
+	crws              *contentReadWriteSeekerImpl
 	closed            bool
 	indexReadDir      int
 	indexReaddir      int
@@ -79,29 +202,29 @@ func (f *File) Close() error {
 }
 
 func (f *File) Read(p []byte) (n int, err error) {
-	if f.node.unlinked || !f.flag.canRead() {
+	if f.node.unlinked {
 		return 0, fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
+	}
+	if !f.flag.canRead() {
+		return 0, fmt.Errorf("cannot read: %s: %w", f.Name(), fs.ErrInvalid)
 	}
 	if f.closed {
 		return 0, fmt.Errorf("file closed: %s: %w", f.Name(), fs.ErrClosed)
 	}
-	f.node.mutex.Lock()
-	defer f.node.mutex.Unlock()
-	n, err = f.buf.Read(p)
-	f.pos += int64(n)
-	return
+	return f.crws.Read(p)
 }
 
 func (f *File) ReadAt(p []byte, off int64) (n int, err error) {
-	if f.node.unlinked || !f.flag.canRead() {
+	if f.node.unlinked {
 		return 0, fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
+	}
+	if !f.flag.canRead() {
+		return 0, fmt.Errorf("cannot read: %s: %w", f.Name(), fs.ErrInvalid)
 	}
 	if f.closed {
 		return 0, fmt.Errorf("file closed: %s: %w", f.Name(), fs.ErrClosed)
 	}
-	f.node.mutex.Lock()
-	defer f.node.mutex.Unlock()
-	return bytes.NewBuffer(f.node.content[off:]).Read(p)
+	return f.crws.ReadAt(p, off)
 }
 
 func (f *File) Seek(offset int64, whence int) (n int64, err error) {
@@ -111,81 +234,36 @@ func (f *File) Seek(offset int64, whence int) (n int64, err error) {
 	if f.closed {
 		return 0, fmt.Errorf("file closed: %s: %w", f.Name(), fs.ErrClosed)
 	}
-	f.node.mutex.Lock()
-	defer f.node.mutex.Unlock()
-	newPos, offs := int64(0), offset
-	switch whence {
-	case io.SeekStart:
-		newPos = offs
-	case io.SeekCurrent:
-		newPos = f.pos + offs
-	case io.SeekEnd:
-		newPos = int64(f.buf.Len()) + offs
-	}
-	if newPos < 0 {
-		return 0, errors.New("negative result pos")
-	}
-	f.pos = newPos
-	f.buf = bytes.NewBuffer(f.node.content[f.pos:])
-	return newPos, nil
+	return f.crws.Seek(offset, whence)
 }
 
 func (f *File) Write(p []byte) (n int, err error) {
-	if f.node.unlinked || !f.flag.canWrite() {
+	if f.node.unlinked {
 		return 0, fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
+	}
+	if !f.flag.canWrite() {
+		return 0, fmt.Errorf("cannot write: %s: %w", f.Name(), fs.ErrInvalid)
 	}
 	if f.closed {
 		return 0, fmt.Errorf("file closed: %s: %w", f.Name(), fs.ErrClosed)
 	}
-	f.node.mutex.Lock()
-	defer f.node.mutex.Unlock()
-	// if the offset is past the end of the buffer, grow the buffer with null bytes.
-	if extra := f.pos - int64(f.buf.Len()); extra > 0 {
-		if _, err := f.buf.Write(make([]byte, extra)); err != nil {
-			return n, err
-		}
-	}
-	// if the offset isn't at the end of the buffer, write as much as we can.
-	if f.pos < int64(f.buf.Len()) {
-		n = copy(f.buf.Bytes()[f.pos:], p)
-		p = p[n:]
-	}
-	// if there are remaining bytes, append them to the buffer.
-	if len(p) > 0 {
-		var bn int
-		bn, err = f.buf.Write(p)
-		n += bn
-	}
-
-	f.node.content = f.buf.Bytes()
-
-	f.pos += int64(n)
-	return n, err
+	return f.crws.Write(p)
 }
 
 func (f *File) WriteAt(p []byte, off int64) (n int, err error) {
-	if f.node.unlinked || !f.flag.canWrite() {
+	if f.node.unlinked {
 		return 0, fmt.Errorf("file unlinked: %s: %w", f.Name(), fs.ErrInvalid)
+	}
+	if !f.flag.canWrite() {
+		return 0, fmt.Errorf("cannot write: %s: %w", f.Name(), fs.ErrInvalid)
+	}
+	if f.flag.isAppend() {
+		return 0, fmt.Errorf("append only file %s: %w", f.Name(), fs.ErrInvalid)
 	}
 	if f.closed {
 		return 0, fmt.Errorf("file closed: %s: %w", f.Name(), fs.ErrClosed)
 	}
-	f.node.mutex.Lock()
-	defer f.node.mutex.Unlock()
-	// if the offset isn't at the end of the buffer, write as much as we can.
-	if off < int64(f.buf.Len()) {
-		n = copy(f.buf.Bytes()[off:], p)
-		p = p[n:]
-	}
-	// if there are remaining bytes, append them to the buffer.
-	if len(p) > 0 {
-		var bn int
-		bn, err = f.buf.Write(p)
-		n += bn
-	}
-
-	f.node.content = f.buf.Bytes()
-	return n, err
+	return f.crws.WriteAt(p, off)
 }
 
 func (f *File) ReadDir(n int) ([]os.DirEntry, error) {

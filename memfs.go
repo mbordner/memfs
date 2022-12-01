@@ -1,9 +1,9 @@
 package memfs
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"math/rand"
 	"os"
@@ -229,22 +229,26 @@ func (f *FS) OpenFile(path string, flag int, perm os.FileMode) (*File, error) {
 		return nil, fmt.Errorf("path does not exist: %s: %w", path, fs.ErrNotExist)
 	}
 
-	var pos int64
+	crws := &contentReadWriteSeekerImpl{owner: entryNode}
 
 	if entryNode != nil {
 		if entryNode.isDir() {
-			return nil, fmt.Errorf("path is a directory: %s: %w", path, fs.ErrExist)
+			return &File{
+				node: entryNode,
+				flag: fileFlag,
+				fd:   f.getNextFileDescriptor(),
+			}, nil
 		}
 		if fileFlag.canWrite() {
 			if fileFlag.isCreate() && fileFlag.isCreateMustNotExist() {
 				return nil, fmt.Errorf("path exists: %s: %w", path, fs.ErrExist)
 			}
 			if fileFlag.isTruncating() {
-				entryNode.mutex.Lock()
+				entryNode.lockContent()
 				entryNode.content = []byte{}
-				entryNode.mutex.Unlock()
+				entryNode.unlockContent()
 			} else if fileFlag.isAppend() {
-				pos = int64(len(entryNode.content))
+				_, _ = crws.Seek(0, io.SeekEnd)
 			}
 		}
 	} else {
@@ -260,6 +264,7 @@ func (f *FS) OpenFile(path string, flag int, perm os.FileMode) (*File, error) {
 					modified: time.Now(),
 					content:  []byte{},
 				}
+				crws.owner = entryNode
 				parentNode.entries[missingPath] = entryNode
 			} else {
 				return nil, fmt.Errorf("path does not exist and cannot create: %s: %w", path, fs.ErrInvalid)
@@ -270,9 +275,8 @@ func (f *FS) OpenFile(path string, flag int, perm os.FileMode) (*File, error) {
 	return &File{
 		node: entryNode,
 		flag: fileFlag,
-		buf:  bytes.NewBuffer(entryNode.content),
+		crws: crws,
 		fd:   f.getNextFileDescriptor(),
-		pos:  pos,
 	}, nil
 }
 
