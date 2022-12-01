@@ -90,9 +90,6 @@ func (mfs *memFS) TempDir() string { return mfs.fs.TempDir() }
 fs = &memFS{fs: memfs.New()}
 ```
 
-
-![graph](https://codecov.io/gh/mbordner/memfs/branch/main/graphs/sunburst.svg?token=E98K7R5ZIY)
-
 ![graph](https://codecov.io/gh/mbordner/memfs/branch/main/graphs/icicle.svg?token=E98K7R5ZIY)
 
 ### Example

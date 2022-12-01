@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/stretchr/testify/assert"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -437,6 +436,6 @@ func Test_ReadDirFuncs(t *testing.T) {
 	f, err := inMemFS.CreateTemp("/blah", "blah")
 	assert.NotNil(t, err)
 	assert.Nil(t, f)
-	assert.True(t, errors.Is(err, fs.ErrNotExist))
+	assert.True(t, errors.Is(err, os.ErrNotExist))
 
 }

@@ -88,7 +88,7 @@ func (f *FS) ValidPath(path string) bool {
 
 func (f *FS) getEntry(path string) (parent *fsNode, entry *fsNode, missingPath string, err error) {
 	if !f.ValidPath(path) {
-		return nil, nil, "", fmt.Errorf("invalid path: %s: %w", path, fs.ErrInvalid)
+		return nil, nil, "", fmt.Errorf("invalid path: %s: %w", path, os.ErrInvalid)
 	}
 
 	path = f.getAbsolutePath(path)
@@ -107,10 +107,6 @@ func (f *FS) getEntry(path string) (parent *fsNode, entry *fsNode, missingPath s
 		parts = strings.Split(filepath.Clean(parentDir), string(filepath.Separator))
 	}
 
-	if len(parts) == 0 || parts[0] != "" {
-		return nil, nil, "", fmt.Errorf("invalid path: %s: %w", path, fs.ErrInvalid)
-	}
-
 	current := f.root
 	parts = parts[1:]
 	for i, part := range parts {
@@ -118,7 +114,7 @@ func (f *FS) getEntry(path string) (parent *fsNode, entry *fsNode, missingPath s
 		if e, exists := current.entries[part]; exists {
 			if !e.isDir() {
 				current.mutex.Unlock()
-				return nil, nil, "", fmt.Errorf("not a directory: %s: %w", part, fs.ErrInvalid)
+				return nil, nil, "", fmt.Errorf("not a directory: %s: %w", part, os.ErrInvalid)
 			}
 			current.mutex.Unlock()
 			current = e
@@ -136,17 +132,13 @@ func (f *FS) getEntry(path string) (parent *fsNode, entry *fsNode, missingPath s
 }
 
 func (f *FS) MkdirAll(path string, perm os.FileMode) error {
-	if !f.ValidPath(path) {
-		return fmt.Errorf("invalid path: %s: %w", path, fs.ErrInvalid)
+	if path == "" || !f.ValidPath(path) {
+		return fmt.Errorf("invalid path: %s: %w", path, os.ErrInvalid)
 	}
 
+	path = f.getAbsolutePath(path)
+
 	parts := strings.Split(path, string(filepath.Separator))
-	if len(parts) == 0 || parts[0] != "" {
-		return fmt.Errorf("invalid path: %s: %w", path, fs.ErrInvalid)
-	}
-	if len(parts) == 1 {
-		return nil
-	}
 
 	current := f.root
 	for _, part := range parts[1:] {
@@ -154,7 +146,7 @@ func (f *FS) MkdirAll(path string, perm os.FileMode) error {
 		if entry, exists := current.entries[part]; exists {
 			if !entry.isDir() {
 				current.mutex.Unlock()
-				return fmt.Errorf("not a directory: %s: %w", part, fs.ErrInvalid)
+				return fmt.Errorf("not a directory: %s: %w", part, os.ErrInvalid)
 			}
 			current.mutex.Unlock()
 			current = entry
@@ -226,7 +218,7 @@ func (f *FS) OpenFile(path string, flag int, perm os.FileMode) (*File, error) {
 	// the path yet to create would point to a further nesting directory, the full path to the parent
 	// directory does not exist and should be an error
 	if missingPath != "" && len(strings.Split(missingPath, string(filepath.Separator))) > 1 {
-		return nil, fmt.Errorf("path does not exist: %s: %w", path, fs.ErrNotExist)
+		return nil, fmt.Errorf("path does not exist: %s: %w", path, os.ErrNotExist)
 	}
 
 	crws := &contentReadWriteSeekerImpl{owner: entryNode}
@@ -241,11 +233,11 @@ func (f *FS) OpenFile(path string, flag int, perm os.FileMode) (*File, error) {
 		}
 		if fileFlag.canWrite() {
 			if fileFlag.isCreate() && fileFlag.isCreateMustNotExist() {
-				return nil, fmt.Errorf("path exists: %s: %w", path, fs.ErrExist)
+				return nil, fmt.Errorf("path exists: %s: %w", path, os.ErrExist)
 			}
 			if fileFlag.isTruncating() {
 				entryNode.lockContent()
-				entryNode.content = []byte{}
+				entryNode.setContent([]byte{})
 				entryNode.unlockContent()
 			} else if fileFlag.isAppend() {
 				_, _ = crws.Seek(0, io.SeekEnd)
@@ -253,7 +245,7 @@ func (f *FS) OpenFile(path string, flag int, perm os.FileMode) (*File, error) {
 		}
 	} else {
 		if fileFlag.isReadOnly() {
-			return nil, fmt.Errorf("path does not exist: %s: %w", path, fs.ErrNotExist)
+			return nil, fmt.Errorf("path does not exist: %s: %w", path, os.ErrNotExist)
 		} else {
 			if fileFlag.isCreate() {
 				parentNode.mutex.Lock()
@@ -267,7 +259,7 @@ func (f *FS) OpenFile(path string, flag int, perm os.FileMode) (*File, error) {
 				crws.owner = entryNode
 				parentNode.entries[missingPath] = entryNode
 			} else {
-				return nil, fmt.Errorf("path does not exist and cannot create: %s: %w", path, fs.ErrInvalid)
+				return nil, fmt.Errorf("path does not exist and cannot create: %s: %w", path, os.ErrInvalid)
 			}
 		}
 	}
@@ -286,7 +278,7 @@ func (f *FS) Stat(path string) (FileInfo, error) {
 		return FileInfo{}, err
 	}
 	if missingPath != "" {
-		return FileInfo{}, fmt.Errorf("path does not exist: %s: %w", path, fs.ErrNotExist)
+		return FileInfo{}, fmt.Errorf("path does not exist: %s: %w", path, os.ErrNotExist)
 	}
 	return FileInfo{node: entryNode}, nil
 }
@@ -297,7 +289,7 @@ func (f *FS) Remove(path string) error {
 		return err
 	}
 	if missingPath != "" {
-		return fmt.Errorf("path does not exist: %s: %w", path, fs.ErrNotExist)
+		return fmt.Errorf("path does not exist: %s: %w", path, os.ErrNotExist)
 	}
 	if entryNode.isDir() {
 		if len(entryNode.entries) == 0 {
@@ -306,7 +298,7 @@ func (f *FS) Remove(path string) error {
 			entryNode.unlinked = true
 			delete(parentNode.entries, entryNode.name)
 		} else {
-			return fmt.Errorf("directory not empty: %s: %w", path, fs.ErrInvalid)
+			return fmt.Errorf("directory not empty: %s: %w", path, os.ErrInvalid)
 		}
 	} else {
 		parentNode.mutex.Lock()
@@ -323,7 +315,7 @@ func (f *FS) RemoveAll(path string) error {
 		return err
 	}
 	if missingPath != "" {
-		return fmt.Errorf("path does not exist: %s: %w", path, fs.ErrNotExist)
+		return fmt.Errorf("path does not exist: %s: %w", path, os.ErrNotExist)
 	}
 	if entryNode.isDir() {
 		for part := range entryNode.entries {
@@ -347,7 +339,7 @@ func (f *FS) ReadDir(path string) ([]os.DirEntry, error) {
 		return nil, err
 	}
 	if missingPath != "" {
-		return nil, fmt.Errorf("path does not exist: %s: %w", path, fs.ErrNotExist)
+		return nil, fmt.Errorf("path does not exist: %s: %w", path, os.ErrNotExist)
 	}
 	names := entryNode.getEntryNames()
 	entryNode.mutex.Lock()
@@ -371,10 +363,10 @@ func (f *FS) Mkdir(path string, perm os.FileMode) error {
 		return nil
 	}
 	if entryNode != nil {
-		return fmt.Errorf("path exists: %s: %w", path, fs.ErrExist)
+		return fmt.Errorf("path exists: %s: %w", path, os.ErrExist)
 	}
 	if missingPath != "" && len(strings.Split(missingPath, string(filepath.Separator))) > 1 {
-		return fmt.Errorf("path does not exist: %s: %w", path, fs.ErrNotExist)
+		return fmt.Errorf("path does not exist: %s: %w", path, os.ErrNotExist)
 	}
 	parentNode.mutex.Lock()
 	defer parentNode.mutex.Unlock()
@@ -398,7 +390,7 @@ func (f *FS) CreateTemp(dir, pattern string) (*File, error) {
 		return nil, err
 	}
 	if entryNode == nil || !entryNode.isDir() {
-		return nil, fmt.Errorf("dir does not exist: %s: %w", dir, fs.ErrNotExist)
+		return nil, fmt.Errorf("dir does not exist: %s: %w", dir, os.ErrNotExist)
 	}
 
 	var file *File
@@ -419,7 +411,7 @@ func (f *FS) MkdirTemp(dir, pattern string) (name string, err error) {
 		return "", err
 	}
 	if entryNode == nil || !entryNode.isDir() {
-		return "", fmt.Errorf("dir does not exist: %s: %w", dir, fs.ErrNotExist)
+		return "", fmt.Errorf("dir does not exist: %s: %w", dir, os.ErrNotExist)
 	}
 
 	var tDir string
