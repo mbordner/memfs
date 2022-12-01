@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/stretchr/testify/assert"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -285,12 +286,29 @@ func Test_File_Operations(t *testing.T) {
 
 	assert.Equal(t, relPath, fi.Name())
 	assert.False(t, fi.IsDir())
+
+	f6, err := inMemFS.CreateTemp("", "blah*blah*blah*")
+	assert.NotNil(t, f6)
+	assert.Nil(t, err)
+
+	s, err = f6.Stat()
+	assert.IsType(t, "", s.Name())
+	assert.False(t, s.IsDir())
+	assert.Greater(t, int(s.Mode()), 0)
+	assert.NotNil(t, s.ModTime())
 }
 
 func Test_ReadDirFuncs(t *testing.T) {
 
 	inMemFS := New()
 	tmpDirName, err := inMemFS.MkdirTemp("", "test*")
+	assert.Nil(t, err)
+	assert.Contains(t, tmpDirName, "test")
+
+	err = inMemFS.Remove(tmpDirName)
+	assert.Nil(t, err)
+
+	tmpDirName, err = inMemFS.MkdirTemp("", "test*")
 	assert.Nil(t, err)
 	assert.Contains(t, tmpDirName, "test")
 
@@ -302,9 +320,27 @@ func Test_ReadDirFuncs(t *testing.T) {
 		files[i] = f
 	}
 
+	tfi, err := files[0].Readdir(-1)
+	assert.NotNil(t, err)
+	assert.Nil(t, tfi)
+
+	tde, err := files[0].ReadDir(-1)
+	assert.NotNil(t, err)
+	assert.Nil(t, tde)
+
+	tn, err := files[0].Readdirnames(-1)
+	assert.NotNil(t, err)
+	assert.Nil(t, tn)
+
 	dir, err := inMemFS.Open(tmpDirName)
 	assert.Nil(t, err)
 	assert.NotNil(t, dir)
+
+	s, err := dir.Stat()
+	assert.Nil(t, err)
+	assert.NotNil(t, s)
+	assert.Equal(t, 0, int(s.Size()))
+	assert.Nil(t, s.Sys())
 
 	names, err := dir.Readdirnames(-1)
 	assert.Nil(t, err)
@@ -321,6 +357,13 @@ func Test_ReadDirFuncs(t *testing.T) {
 	entries, err := dir.ReadDir(-1)
 	assert.Nil(t, err)
 	assert.Equal(t, 10, len(entries))
+
+	assert.IsType(t, "", entries[0].Name())
+	assert.False(t, entries[0].IsDir())
+	assert.Equal(t, 0, int(entries[0].Type()))
+	di, err := entries[0].Info()
+	assert.NotNil(t, di)
+	assert.Nil(t, err)
 
 	entries, err = dir.ReadDir(5)
 	assert.Nil(t, err)
@@ -365,6 +408,10 @@ func Test_ReadDirFuncs(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.True(t, errors.Is(err, os.ErrClosed))
 
+	err = inMemFS.Remove(tmpDirName)
+	assert.NotNil(t, err)
+	assert.True(t, errors.Is(err, os.ErrInvalid))
+
 	err = inMemFS.RemoveAll(tmpDirName)
 	assert.Nil(t, err)
 
@@ -379,5 +426,17 @@ func Test_ReadDirFuncs(t *testing.T) {
 	entries, err = dir.ReadDir(5)
 	assert.NotNil(t, err)
 	assert.True(t, errors.Is(err, os.ErrInvalid))
+
+	err = inMemFS.RemoveAll(string([]byte{0x52, 0xE4, 0x76}))
+	assert.NotNil(t, err)
+
+	n, err := inMemFS.MkdirTemp(string([]byte{0x52, 0xE4, 0x76}), string([]byte{0x52, 0xE4, 0x76}))
+	assert.NotNil(t, err)
+	assert.Equal(t, "", n)
+
+	f, err := inMemFS.CreateTemp("/blah", "blah")
+	assert.NotNil(t, err)
+	assert.Nil(t, f)
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
 
 }
