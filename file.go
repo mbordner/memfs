@@ -32,7 +32,7 @@ type contentReadWriteSeekerImpl struct {
 
 func (crws *contentReadWriteSeekerImpl) read(p []byte) (n int, err error) {
 	content := crws.owner.getContent()
-	if crws.pos >= len(p) {
+	if crws.pos >= len(content) {
 		return 0, io.EOF
 	}
 	n = copy(p, content[crws.pos:])
