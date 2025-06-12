@@ -37,7 +37,10 @@ func (crws *contentReadWriteSeekerImpl) read(p []byte) (n int, err error) {
 	}
 	n = copy(p, content[crws.pos:])
 	crws.pos += n
-	return n, nil
+	if crws.pos == len(content) {
+		err = io.EOF
+	}
+	return n, err
 }
 
 func (crws *contentReadWriteSeekerImpl) Read(p []byte) (n int, err error) {
